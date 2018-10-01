@@ -1,5 +1,8 @@
 # tinydb-constraint
 
+[![PyPI version shields.io](https://img.shields.io/pypi/v/tinydb-constraint.svg)](https://pypi.python.org/pypi/tinydb-constraint/)
+[![PyPI license](https://img.shields.io/pypi/l/tinydb-constraint.svg)](https://pypi.python.org/pypi/tinydb-constraint/)
+
 Apply constraints before inserting and updating TinyDB records.
 
 ## Installation
