@@ -43,14 +43,25 @@ class ConstraintTable(Table):
         def _records():
             for record in records:
                 record_schema = dict(self._parse_record(record, yield_type=True))
+                num_to_str = set()
                 for k, v in record_schema.items():
                     expected_type = self.constraint_mapping.type_.get(k, None)
                     if expected_type and v is not expected_type:
-                        raise NonUniformTypeException('{} not in table schema {}'
-                                                      .format(v, self.get_schema(refresh=False)))
+                        if expected_type is str and v in (int, float):
+                            # v = str
+                            num_to_str.add(k)
+                        else:
+                            raise NonUniformTypeException('{} not in table schema {}'
+                                                          .format(v, self.get_schema(refresh=False)))
 
                 self.update_schema(record_schema)
-                yield dict(self._parse_record(record, yield_type=False))
+
+                record = dict(self._parse_record(record, yield_type=False))
+                for k, v in record.items():
+                    if k in num_to_str:
+                        record[k] = str(v)
+
+                return record
 
         if bool(int(os.getenv('TINYDB_SANITIZE', '1'))):
             self.refresh()
@@ -137,7 +148,10 @@ class ConstraintTable(Table):
             for k, v in self._parse_record(record, yield_type=True):
                 expected_type = self.constraint_mapping.type_.get(k, None)
                 if expected_type and v is not expected_type:
-                    raise NonUniformTypeException('{} type is not {}'.format(v, expected_type))
+                    if expected_type is str and v in (int, float):
+                        v = str
+                    else:
+                        raise NonUniformTypeException('{} type is not {}'.format(v, expected_type))
 
                 if output_mapping:
                     type_list = output_mapping.type_.get(k, [])
