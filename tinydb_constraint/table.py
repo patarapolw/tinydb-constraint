@@ -15,29 +15,50 @@ class ConstraintTable(Table):
     constraint_mapping = ConstraintMapping()
 
     def insert(self, element):
+        self._update_uniqueness(element)
         return super().insert(self._sanitize_one(element))
 
     def insert_multiple(self, elements):
+        for element in elements:
+            self._update_uniqueness(element)
         return super().insert_multiple(self._sanitize_multiple(elements))
 
-    def update(self, fields, cond=None, doc_ids=None, eids=None):
+    def insert_if_not_exists(self, element, cond):
         if isinstance(cond, (list, tuple)):
-            con0 = (Query()[cond[0]] == fields.pop(cond[0]))
+            con0 = (Query()[cond[0]] == element[cond[0]])
             for con in cond[1:]:
                 con0 = (con0 & con)
             cond = con0
         elif isinstance(cond, str):
-            cond = (Query()[cond] == fields.pop(cond))
+            cond = (Query()[cond] == element[cond])
 
-        if doc_ids is None:
-            doc_ids = list()
+        records = self.search(cond)
 
+        if not records:
+            return self.insert(element)
+
+    def update(self, fields, cond=None, doc_ids=None, eids=None):
         if callable(fields):
             _update = lambda data, eid: self._sanitize_one(fields(data[eid]))
         else:
+            if isinstance(cond, (list, tuple)):
+                fields = fields.copy()
+                con0 = (Query()[cond[0]] == fields.pop(cond[0]))
+                for con in cond[1:]:
+                    con0 = (con0 & con)
+                cond = con0
+            elif isinstance(cond, str):
+                fields = fields.copy()
+                cond = (Query()[cond] == fields.pop(cond))
+
             _update = lambda data, eid: data[eid].update(self._sanitize_one(fields))
 
-        return self.process_elements(_update, cond, doc_ids, eids)
+        doc_ids = self.process_elements(_update, cond, doc_ids, eids)
+        if doc_ids:
+            for record in self.search(cond):
+                self._update_uniqueness(record)
+
+        return doc_ids
 
     def _sanitize_multiple(self, records):
         """Sanitizes records, e.g. from Excel spreadsheet
@@ -63,7 +84,7 @@ class ConstraintTable(Table):
                             raise NonUniformTypeException('{} not in table schema {}'
                                                           .format(v, self.get_schema(refresh=False)))
 
-                self.update_schema(record_schema)
+                    self.update_schema(record_schema)
 
                 record = dict(self._parse_record(record, yield_type=False))
                 for k, v in record.items():
@@ -77,10 +98,8 @@ class ConstraintTable(Table):
             for c in self.get_schema(refresh=False).values():
                 assert not isinstance(c.type_, list)
 
-            records = list(_records())
-            self.refresh()
-
-            return records
+            # self.refresh()
+            return list(_records())
         else:
             return records
 
@@ -90,7 +109,7 @@ class ConstraintTable(Table):
     @property
     def schema(self):
         """Get table's latest schema
-        
+
         Returns:
             dict -- dictionary of constraints
         """
@@ -99,7 +118,7 @@ class ConstraintTable(Table):
 
     def set_schema(self, schema_dict):
         """Reset and set a new schema
-        
+
         Arguments:
             schema_dict {dict} -- dictionary of constraints or types
         """
@@ -109,10 +128,10 @@ class ConstraintTable(Table):
 
     def get_schema(self, refresh=False):
         """Get table's schema, while providing an option to disable refreshing to allow faster getting of schema
-        
+
         Keyword Arguments:
             refresh {bool} -- disable refreshing to allow faster getting of schema (default: {False})
-        
+
         Returns:
             dict -- dictionary of constraints
         """
@@ -124,27 +143,32 @@ class ConstraintTable(Table):
 
     def update_schema(self, schema_dict):
         """Update the schema
-        
+
         Arguments:
             schema_dict {dict} -- dictionary of constraints or types
         """
 
         self.constraint_mapping.update(schema_dict)
 
-    def _update_uniqueness(self, k, v):
-        self.constraint_mapping.preexisting[k].add(v)
+    def _update_uniqueness(self, record_dict):
+        for k, v in self._parse_record(record_dict, yield_type=False):
+            if k in self.constraint_mapping.preexisting.keys():
+                if v in self.constraint_mapping.preexisting[k]:
+                    raise NotUniqueException('Duplicate {} for {} exists'.format(v, k))
+
+                self.constraint_mapping.preexisting[k].add(v)
 
     def refresh(self, output=False):
         """Refresh the schema table
-        
+
         Keyword Arguments:
             output {bool} -- if False, there will be no output, and maybe a little faster (default: {False})
-        
+
         Raises:
             NonUniformTypeException -- Type constraint failed
             NotNullException -- NotNull constraint failed
             NotUniqueException -- Unique constraint failed
-        
+
         Returns:
             dict -- dictionary of constraints
         """
@@ -177,13 +201,6 @@ class ConstraintTable(Table):
 
             if len(is_null) > 0:
                 raise NotNullException('{} is null'.format(list(is_null)))
-
-            for k, v in record.items():
-                if k in self.constraint_mapping.preexisting.keys():
-                    if v in self.constraint_mapping.preexisting[k]:
-                        raise NotUniqueException('Duplicate {} for {} exists'.format(v, k))
-                    else:
-                        self._update_uniqueness(k, v)
 
         if output_mapping:
             for k, v in output_mapping.type_.items():
