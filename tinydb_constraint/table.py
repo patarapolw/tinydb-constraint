@@ -6,7 +6,7 @@ import dateutil.parser
 from datetime import datetime, date
 from copy import deepcopy
 
-from .util import remove_control_chars
+from .util import normalize_chars
 from .constraint import ConstraintMapping
 from .exception import NonUniformTypeException, NotNullException, NotUniqueException
 
@@ -56,7 +56,7 @@ class ConstraintTable(Table):
         doc_ids = self.process_elements(_update, cond, doc_ids, eids)
         if doc_ids:
             for record in self.search(cond):
-                self._update_uniqueness(record)
+                self._update_uniqueness(fields)
 
         return doc_ids
 
@@ -223,7 +223,7 @@ class ConstraintTable(Table):
         for k, v in record.items():
             if bool(int(os.getenv('TINYDB_DATETIME', '1'))):
                 if isinstance(v, str):
-                    v = remove_control_chars(v.strip())
+                    v = normalize_chars(v.strip())
                     if v.isdigit():
                         v = int(v)
                     elif '.' in v and v.replace('.', '', 1).isdigit():
