@@ -3,20 +3,21 @@ from tinydb.database import Table
 import os
 import dateutil.parser
 from datetime import datetime
+from copy import deepcopy
 
 from .util import remove_control_chars
-from .exception import ConstraintException
+from .constraint import ConstraintMapping
+from .exception import NonUniformTypeException, NotNullException, NotUniqueException
 
 
 class ConstraintTable(Table):
-    view_dict = None
-    _schema = None
+    constraint_mapping = ConstraintMapping()
 
     def insert(self, element):
-        return super().insert(element)
+        return super().insert(self._sanitize_one(element))
 
     def insert_multiple(self, elements):
-        return super().insert_multiple(elements)
+        return super().insert_multiple(self._sanitize_multiple(elements))
 
     def update(self, fields, cond=None, doc_ids=None, eids=None):
         if doc_ids is None:
@@ -45,53 +46,86 @@ class ConstraintTable(Table):
 
         def _records():
             for record in records:
-                record_schema = tuple(self._parse_record(record))
+                record_schema = tuple(self._parse_record(record, yield_type=True))
                 for _k, _v in record_schema:
-                    if _v is not table_schema[_k]:
-                        raise ConstraintException('{} not in table schema {}'.format(_v, table_schema))
+                    if _v is not self.constraint_mapping.type_[_k]:
+                        raise NonUniformTypeException('{} not in table schema {}'
+                                                      .format(_v, self.get_schema(refresh=False)))
 
-                table_schema.update(record_schema)
-
+                self.update_schema(record_schema)
                 yield dict(self._parse_record(record, yield_type=False))
 
-        if bool(int(os.getenv('TINYDB_SANITIZE', '0'))):
+        if bool(int(os.getenv('TINYDB_SANITIZE', '1'))):
+            self.refresh()
+            for v in self.get_schema(refresh=False).values():
+                assert not isinstance(v.type_, list)
+
+            records = list(_records())
+            self.refresh()
+
             return records
         else:
-            table_schema = self.schema
-            for v in table_schema.values():
-                assert not isinstance(v, (list, tuple, set))
-
-            return list(_records())
+            return records
 
     def _sanitize_one(self, record):
         return self._sanitize_multiple([record])[0]
 
     @property
     def schema(self):
-        if self._schema is None:
-            self._schema = dict()
-
-        for record in self.all():
-            for k, v in self._parse_record(record):
-                self._schema.setdefault(k, set()).add(v)
-
-        for k, v in self._schema.items():
-            if len(v) == 1:
-                self._schema[k] = v.pop()
-            else:
-                self._schema[k] = list(v)
-
-        return self._schema
+        return self.get_schema(refresh=True)
 
     @schema.setter
-    def schema(self, constraint):
-        if self._schema is None:
-            self._schema = dict()
+    def schema(self, schema_dict):
+        self.update_schema(schema_dict)
 
-        self._schema.update(constraint)
+    def get_schema(self, refresh=False):
+        if refresh:
+            return self.refresh(output=True)
+        else:
+            return self.constraint_mapping.view()
+
+    def update_schema(self, schema_dict):
+        self.constraint_mapping.update(schema_dict)
+
+    def update_uniqueness(self, k, v):
+        self.constraint_mapping.preexisting[k].add(v)
+
+    def refresh(self, output=False):
+        output_mapping = None
+        if output:
+            output_mapping = deepcopy(self.constraint_mapping)
+
+        for record in self.all():
+            for k, v in self._parse_record(record, yield_type=True):
+                expected_type = self.constraint_mapping.type_.get(k, None)
+                if expected_type and v is not expected_type:
+                    raise NonUniformTypeException('{} type is not {}'.format(v, expected_type))
+
+                if output_mapping:
+                    output_mapping.type_.setdefault(k, []).append(v)
+
+            record = dict(self._parse_record(record, yield_type=False))
+            is_null = self.constraint_mapping.not_null - set(record.keys())
+
+            if len(is_null) > 0:
+                raise NotNullException('{} is null'.format(list(is_null)))
+
+            for k, v in record.items():
+                if k in self.constraint_mapping.preexisting.keys():
+                    if v in self.constraint_mapping.preexisting[k]:
+                        raise NotUniqueException('Duplicate {} for {} exists'.format(v, k))
+                    else:
+                        self.update_uniqueness(k, v)
+
+        if output_mapping:
+            for k, v in output_mapping.type_.items():
+                if isinstance(v, list) and len(v) == 1:
+                    output_mapping.type_[k] = v[0]
+
+            return output_mapping.view()
 
     @staticmethod
-    def _parse_record(record, yield_type=True):
+    def _parse_record(record, yield_type):
         def _yield_switch(x):
             if yield_type:
                 return type(x)

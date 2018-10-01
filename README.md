@@ -30,6 +30,11 @@ Method 2:
 ...     'record_id': int,
 ...     'modified': datetime
 ... }
+>>> db.schema
+{
+    'record_id': Constraint(type_=int, unique=False, not_null=False),
+    'modified': Constraint(type_=datetime.datetime, unique=False, not_null=False)
+}
 ```
 
 If you want to enable TinyDB-constraint for all databases in a session, run:
@@ -43,6 +48,24 @@ If you want to enable TinyDB-constraint for all databases in a session, run:
 ## Note
 
 I haven't modified the serialization yet, so `datetime` type will actually produce `datetime.isoformat()`, and to set `datetime`, you have to pass a `dateutil.parser.parse()`-parsable string.
+
+## Advanced usage
+
+Database schema is also settable via `Constraint` object.
+
+```python
+>>> from tinydb_constraint import Constraint
+>>> db.schema = {
+...     'user_id': Constraint(type_=int, unique=True, not_null=True)
+... }
+```
+
+If you want to disable certain string sanitization features, like stripping spaces or checking if string can be converted to datetime, this can be done by setting environmental variables.
+
+```
+TINYDB_SANITIZE=0
+TINYDB_DATETIME=0
+```
 
 ## Related projects
 
