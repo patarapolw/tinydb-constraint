@@ -2,7 +2,7 @@ from tinydb.database import Table
 
 import os
 import dateutil.parser
-from datetime import datetime
+from datetime import datetime, date
 from copy import deepcopy
 
 from .util import remove_control_chars
@@ -189,7 +189,7 @@ class ConstraintTable(Table):
             if yield_type:
                 return type(x)
             else:
-                if isinstance(x, datetime):
+                if isinstance(x, (datetime, date)):
                     return x.isoformat()
                 else:
                     return x
@@ -209,5 +209,8 @@ class ConstraintTable(Table):
                             v = dateutil.parser.parse(v)
                         except ValueError:
                             pass
+
+            if isinstance(v, date):
+                v = datetime.combine(v, datetime.min.time())
 
             yield k, _yield_switch(v)
