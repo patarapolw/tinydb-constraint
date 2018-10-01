@@ -1,0 +1,17 @@
+[tool.poetry]
+name = "tinydb-constraint"
+version = "0.1.0"
+description = "Apply constraints before inserting and updating TinyDB records."
+authors = ["Pacharapol Withyasakpunt <patarapolw@gmail.com>"]
+readme = 'README.md'
+license = 'MIT'
+repository = "https://github.com/patarapolw/tinydb-constraint"
+homepage = "https://github.com/patarapolw/tinydb-constraint"
+keywords = ['TinyDB']
+
+[tool.poetry.dependencies]
+python = "*"
+tinydb = "^3.11"
+python-dateutil = "^2.7"
+
+[tool.poetry.dev-dependencies]
