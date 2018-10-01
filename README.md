@@ -24,8 +24,8 @@ Method 2:
 >>> from tinydb import TinyDB
 >>> from tinydb_constraint import ConstraintTable
 >>> from datetime import datetime
+>>> TinyDB.table_class = ConstraintTable
 >>> db = TinyDB('db.json')
->>> db.table_class = ConstraintTable
 >>> db.set_schema({
 ...     'record_id': int,
 ...     'modified': datetime
@@ -35,14 +35,6 @@ Method 2:
     'record_id': Constraint(type_=int, unique=False, not_null=False),
     'modified': Constraint(type_=datetime.datetime, unique=False, not_null=False)
 }
-```
-
-If you want to enable TinyDB-constraint for all databases in a session, run:
-
-```python
->>> from tinydb import TinyDB
->>> from tinydb_constraint import ConstraintTable
->>> TinyDB.table_class = ConstraintTable
 ```
 
 ## Note
