@@ -61,7 +61,7 @@ class ConstraintTable(Table):
                     if k in num_to_str:
                         record[k] = str(v)
 
-                return record
+                yield record
 
         if bool(int(os.getenv('TINYDB_SANITIZE', '1'))):
             self.refresh()
