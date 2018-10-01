@@ -1,4 +1,5 @@
 from tinydb.database import Table
+from tinydb import Query
 
 import os
 import dateutil.parser
@@ -20,6 +21,14 @@ class ConstraintTable(Table):
         return super().insert_multiple(self._sanitize_multiple(elements))
 
     def update(self, fields, cond=None, doc_ids=None, eids=None):
+        if isinstance(cond, (list, tuple)):
+            con0 = (Query()[cond[0]] == fields.pop(cond[0]))
+            for con in cond[1:]:
+                con0 = (con0 & con)
+            cond = con0
+        elif isinstance(cond, str):
+            cond = (Query()[cond] == fields.pop(cond))
+
         if doc_ids is None:
             doc_ids = list()
 
