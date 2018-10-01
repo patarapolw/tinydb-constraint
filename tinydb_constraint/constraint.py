@@ -1,8 +1,8 @@
-from typing import NamedTuple, Any
+from typing import NamedTuple, Any, Union
 
 
 class Constraint(NamedTuple):
-    type_: (type, list) = Any
+    type_: Union[type, list, type(Any)] = Any
     unique: bool = False
     not_null: bool = False
 

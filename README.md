@@ -26,10 +26,10 @@ Method 2:
 >>> from datetime import datetime
 >>> db = TinyDB('db.json')
 >>> db.table_class = ConstraintTable
->>> db.schema = {
+>>> db.set_schema({
 ...     'record_id': int,
 ...     'modified': datetime
-... }
+... })
 >>> db.schema
 {
     'record_id': Constraint(type_=int, unique=False, not_null=False),
@@ -55,9 +55,9 @@ Database schema is also settable via `Constraint` object.
 
 ```python
 >>> from tinydb_constraint import Constraint
->>> db.schema = {
+>>> db.set_schema({
 ...     'user_id': Constraint(type_=int, unique=True, not_null=True)
-... }
+... })
 ```
 
 If you want to disable certain string sanitization features, like stripping spaces or checking if string can be converted to datetime, this can be done by setting environmental variables.

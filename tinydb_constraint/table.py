@@ -36,29 +36,26 @@ class ConstraintTable(Table):
         Arguments:
             records {iterable} -- Iterable of records
 
-        Keyword Arguments:
-            schema {dict} -- Dictionary of schemas (default: {None})
-            table_name {str} -- Table name to get from schema (default: {None})
-
         Returns:
             list -- List of records
         """
 
         def _records():
             for record in records:
-                record_schema = tuple(self._parse_record(record, yield_type=True))
-                for _k, _v in record_schema:
-                    if _v is not self.constraint_mapping.type_[_k]:
+                record_schema = dict(self._parse_record(record, yield_type=True))
+                for k, v in record_schema.items():
+                    expected_type = self.constraint_mapping.type_.get(k, None)
+                    if expected_type and v is not expected_type:
                         raise NonUniformTypeException('{} not in table schema {}'
-                                                      .format(_v, self.get_schema(refresh=False)))
+                                                      .format(v, self.get_schema(refresh=False)))
 
                 self.update_schema(record_schema)
                 yield dict(self._parse_record(record, yield_type=False))
 
         if bool(int(os.getenv('TINYDB_SANITIZE', '1'))):
             self.refresh()
-            for v in self.get_schema(refresh=False).values():
-                assert not isinstance(v.type_, list)
+            for c in self.get_schema(refresh=False).values():
+                assert not isinstance(c.type_, list)
 
             records = list(_records())
             self.refresh()
@@ -72,25 +69,66 @@ class ConstraintTable(Table):
 
     @property
     def schema(self):
+        """Get table's latest schema
+        
+        Returns:
+            dict -- dictionary of constraints
+        """
+
         return self.get_schema(refresh=True)
 
-    @schema.setter
-    def schema(self, schema_dict):
+    def set_schema(self, schema_dict):
+        """Reset and set a new schema
+        
+        Arguments:
+            schema_dict {dict} -- dictionary of constraints or types
+        """
+
+        self.constraint_mapping = ConstraintMapping()
         self.update_schema(schema_dict)
 
     def get_schema(self, refresh=False):
+        """Get table's schema, while providing an option to disable refreshing to allow faster getting of schema
+        
+        Keyword Arguments:
+            refresh {bool} -- disable refreshing to allow faster getting of schema (default: {False})
+        
+        Returns:
+            dict -- dictionary of constraints
+        """
+
         if refresh:
             return self.refresh(output=True)
         else:
             return self.constraint_mapping.view()
 
     def update_schema(self, schema_dict):
+        """Update the schema
+        
+        Arguments:
+            schema_dict {dict} -- dictionary of constraints or types
+        """
+
         self.constraint_mapping.update(schema_dict)
 
-    def update_uniqueness(self, k, v):
+    def _update_uniqueness(self, k, v):
         self.constraint_mapping.preexisting[k].add(v)
 
     def refresh(self, output=False):
+        """Refresh the schema table
+        
+        Keyword Arguments:
+            output {bool} -- if False, there will be no output, and maybe a little faster (default: {False})
+        
+        Raises:
+            NonUniformTypeException -- Type constraint failed
+            NotNullException -- NotNull constraint failed
+            NotUniqueException -- Unique constraint failed
+        
+        Returns:
+            dict -- dictionary of constraints
+        """
+
         output_mapping = None
         if output:
             output_mapping = deepcopy(self.constraint_mapping)
@@ -102,7 +140,14 @@ class ConstraintTable(Table):
                     raise NonUniformTypeException('{} type is not {}'.format(v, expected_type))
 
                 if output_mapping:
-                    output_mapping.type_.setdefault(k, []).append(v)
+                    type_list = output_mapping.type_.get(k, [])
+                    if isinstance(type_list, type):
+                        type_list = [type_list]
+
+                    if v not in type_list:
+                        type_list.append(v)
+
+                    output_mapping.type_[k] = type_list
 
             record = dict(self._parse_record(record, yield_type=False))
             is_null = self.constraint_mapping.not_null - set(record.keys())
@@ -115,7 +160,7 @@ class ConstraintTable(Table):
                     if v in self.constraint_mapping.preexisting[k]:
                         raise NotUniqueException('Duplicate {} for {} exists'.format(v, k))
                     else:
-                        self.update_uniqueness(k, v)
+                        self._update_uniqueness(k, v)
 
         if output_mapping:
             for k, v in output_mapping.type_.items():
