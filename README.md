@@ -67,6 +67,10 @@ TINYDB_SANITIZE=0
 TINYDB_DATETIME=0
 ```
 
+## Plan
+
+- Add ForeignKey constraints.
+
 ## Related projects
 
 - [tinydb-viewer](https://github.com/patarapolw/tinydb-viewer) - View records generated from TinyDB and alike (e.g. list of dictionaries.)
