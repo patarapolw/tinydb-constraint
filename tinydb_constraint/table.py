@@ -41,17 +41,17 @@ class ConstraintTable(Table):
         if callable(fields):
             _update = lambda data, eid: self._sanitize_one(fields(data[eid]))
         else:
+            fields = self._sanitize_one(fields)
+
             if isinstance(cond, (list, tuple)):
-                fields = fields.copy()
                 con0 = (Query()[cond[0]] == fields.pop(cond[0]))
                 for con in cond[1:]:
                     con0 = (con0 & con)
                 cond = con0
             elif isinstance(cond, str):
-                fields = fields.copy()
                 cond = (Query()[cond] == fields.pop(cond))
 
-            _update = lambda data, eid: data[eid].update(self._sanitize_one(fields))
+            _update = lambda data, eid: data[eid].update(fields)
 
         doc_ids = self.process_elements(_update, cond, doc_ids, eids)
         if doc_ids:
